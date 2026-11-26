@@ -46,6 +46,7 @@ read_stack <- function(source) {
 
 # Figure settings
 fig2_sources <- strsplit(Sys.getenv("FIG2_SOURCES", "annual5"), ",")[[1]]
+fig2_annual  <- as.logical(Sys.getenv("FIG2_ANNUAL", "TRUE"))  # annual panels (b)-(d)
 run_fig13 <- as.logical(Sys.getenv("RUN_FIG13", "FALSE"))
 r_stack <- read_stack(if (run_fig13) "combined" else fig2_sources[1])
 gbif_stack <- if (run_fig13) read_stack("gbif") else r_stack
@@ -230,6 +231,38 @@ p2d <- ggplot(metrics, aes(Period, elev95_shift_m, group = 1)) +
   geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 2.2) +
   scale_x_discrete(labels = short_labels) +
   labs(x = NULL, y = "Elevational-edge shift (m)\n(95th percentile)") + panel_theme
+
+# Annual panels with trends
+if (fig2_annual) {
+  sfx <- "_annual"
+  ann <- read.csv("output/annual/annual_metrics.csv") %>%
+    mutate(north_shift_km = (north95_deg - first(north95_deg)) * 111.2,
+           south_shift_km = (south95_deg - first(south95_deg)) * 111.2,
+           elev95_shift_m = elev95_m - first(elev95_m))
+  year_axis <- scale_x_continuous(breaks = c(2001, 2005, 2010, 2015, 2020, 2025))
+  trend <- geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = "grey55", linewidth = 0.6)
+
+  p2b <- ggplot(ann, aes(year, area_mkm2)) + trend +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.6) +
+    year_axis + labs(x = NULL, y = "Suitable habitat (million km²)") + panel_theme
+
+  ann_lat <- ann %>% select(year, north_shift_km, south_shift_km) %>%
+    pivot_longer(-year, names_to = "Hemisphere", values_to = "shift_km") %>%
+    mutate(Hemisphere = recode(Hemisphere, north_shift_km = "Northern", south_shift_km = "Southern"))
+  p2c <- ggplot(ann_lat, aes(year, shift_km, group = Hemisphere,
+                             linetype = Hemisphere, shape = Hemisphere)) +
+    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) + trend +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.5) +
+    scale_linetype_manual(values = c(Northern = "solid", Southern = "dashed")) +
+    scale_shape_manual(values = c(Northern = 16, Southern = 17)) +
+    year_axis + labs(x = NULL, y = "Poleward-edge shift (km)\n(95th percentile)", linetype = NULL, shape = NULL) +
+    panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
+
+  p2d <- ggplot(ann, aes(year, elev95_shift_m)) +
+    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) + trend +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.6) +
+    year_axis + labs(x = NULL, y = "Elevational-edge shift (m)\n(95th percentile)") + panel_theme
+}
 
 figure2 <- (p2a / (p2b | p2c | p2d)) +
   plot_layout(heights = c(1.6, 1), widths = c(1.2, 1, 1)) +
