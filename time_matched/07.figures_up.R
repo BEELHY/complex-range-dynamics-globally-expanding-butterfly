@@ -609,10 +609,13 @@ if (fig_annual_all) {
 gcb_save(figure2, "Figure_2", 125)
 if (fig_annual_all) {
   top_room <- theme(plot.margin = margin(16, 8, 6, 6))
-  g3 <- (p3a / ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | (p3c + top_room) |
-                (p3d + top_room))) +
-    plot_layout(heights = c(1.9, 1), guides = "collect") +
+  # 3c legend as 2c
+  g3c <- p3c + scale_colour_manual(values = comparison_cols, name = NULL) + top_room +
+    theme(legend.position = "bottom", legend.text = element_text(size = 8))
+  g3 <- ((p3a + theme(legend.position = "bottom")) /
+         ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | g3c | (p3d + labs(y = "Centroid\ndisplacement (km)") + top_room))) +
+    plot_layout(heights = c(1.9, 1), guides = "keep") +
     plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
-    theme(legend.position = "bottom", plot.tag = element_text(face = "bold", size = 12))
+    theme(plot.tag = element_text(face = "bold", size = 12))
   gcb_save(g3, "Figure_3", 118)
 }
