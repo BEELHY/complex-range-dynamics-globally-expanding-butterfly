@@ -60,7 +60,7 @@ get_scores <- function(period, source) {
   # Cells with supplementary records
   if (source == "supp") {
     d <- d %>%
-      filter(grepl("Facebook|Literature|Flickr", sources,
+      filter(grepl("Facebook|Literature|Flickr|Lohman", sources,
                    ignore.case = TRUE))
   }
 

@@ -103,7 +103,7 @@ gbif_occ <- read.csv("data/occ/gbif.csv") %>%
   transmute(cell, year_group, source_group = "GBIF")
 
 supp_occ <- read.csv("data/occ/com.csv") %>%
-  filter(grepl("Facebook|Literature|Flickr", sources,
+  filter(grepl("Facebook|Literature|Flickr|Lohman", sources,
                ignore.case = TRUE)) %>%
   transmute(cell, year_group, source_group = "Supplementary")
 
@@ -439,5 +439,144 @@ figure3 <- (p3a / (p3b | p3c | p3d)) +
 print(figure3)
 
 ggsave("output/figure/figure3_data_source_comparison.png",
+       figure3, width = 11.69, height = 8.27, dpi = 400, bg = "white")
+}
+
+############################################
+# Annual Figures 1 and 3
+############################################
+fig_annual_all <- as.logical(Sys.getenv("FIG13_ANNUAL", "TRUE"))
+if (fig_annual_all) {
+years_all <- 2001:2025
+
+# Figure 1: yearly coverage
+com_occ <- read.csv("data/occ/com.csv")
+occ_y <- bind_rows(
+  com_occ %>% filter(grepl("GBIF", sources)) %>% transmute(cell, year, source_group = "GBIF"),
+  com_occ %>% filter(grepl("Facebook|Literature|Flickr|Lohman", sources, ignore.case = TRUE)) %>%
+    transmute(cell, year, source_group = "Supplementary"))
+template <- terra::rast("data/env/env_overall.tif")[[1]]
+xy <- terra::xyFromCell(template, occ_y$cell)
+occ_y$longitude <- xy[, 1]; occ_y$latitude <- xy[, 2]
+fig1_map_sf <- occ_y %>% distinct(source_group, cell, .keep_all = TRUE) %>%
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+p1a <- ggplot() +
+  geom_sf(data = land, fill = "white", colour = "grey75", linewidth = 0.25) +
+  geom_sf(data = fig1_map_sf, aes(colour = source_group), alpha = 0.8, size = 0.7) +
+  scale_colour_manual(values = source_cols) +
+  coord_sf(xlim = c(-180, 180), ylim = c(-60, 85), expand = FALSE, datum = NA) +
+  labs(colour = NULL) + theme_void() +
+  theme(legend.position = "bottom", plot.margin = margin(5, 5, 5, 5))
+fig1_bar_y <- occ_y %>% distinct(year, source_group, cell) %>%
+  count(year, source_group, name = "n_cells") %>%
+  group_by(year) %>% mutate(prop = n_cells / sum(n_cells)) %>% ungroup() %>%
+  mutate(source_group = factor(source_group, levels = names(source_cols)))
+write.csv(fig1_bar_y, "output/figure/figure1_coverage_annual.csv", row.names = FALSE)
+p1b <- ggplot(fig1_bar_y, aes(factor(year), prop, fill = source_group)) +
+  geom_col(width = 0.85, colour = "white", linewidth = 0.2) +
+  scale_fill_manual(values = source_cols) +
+  scale_x_discrete(breaks = as.character(seq(2001, 2025, 4)), expand = expansion(add = c(2, 0.6))) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = c(0, 0)) +
+  labs(x = NULL, y = "Source-specific grid coverage (%)", fill = NULL) +
+  theme_classic(base_size = 11) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.margin = margin(5, 5, 5, 5))
+figure1 <- p1a + p1b + plot_layout(widths = c(1.7, 1))
+ggsave("output/figure/data_coverage_annual.png", figure1, width = 12.5, height = 5.8, dpi = 400, bg = "white")
+
+# Figure 3: GBIF vs combined
+read_year <- function(ds, y) {
+  r <- terra::rast(sprintf("output/sdm/%s/%s_bin_%d.tif", ds, ds, y))
+  r <- terra::extend(r, ref); r <- terra::resample(r, ref, method = "near")
+  terra::ifel(is.na(r), 0, r)
+}
+cmp_year <- setNames(lapply(years_all, function(y) {
+  terra::ifel(land_mask == 1, read_year("annual_gbif", y) + 2 * read_year("annual", y), NA)
+}), years_all)
+
+# (a) five-year windows
+win <- split(years_all, rep(periods, each = 5))
+comparison <- setNames(lapply(periods, function(p) {
+  g <- sum(terra::rast(lapply(as.character(win[[p]]), function(y) cmp_year[[y]] %in% c(1, 3)))) >= 3
+  c <- sum(terra::rast(lapply(as.character(win[[p]]), function(y) cmp_year[[y]] %in% c(2, 3)))) >= 3
+  terra::ifel(land_mask == 1, g + 2 * c, NA)
+}), periods)
+MAP_FACT <- 2L
+map3 <- bind_rows(lapply(periods, function(p) map_to_df(comparison[[p]], 1:3, names(comparison_cols), period = p)))
+p3a <- ggplot() +
+  geom_sf(data = land, fill = "white", colour = "grey85", linewidth = 0.2) +
+  geom_raster(data = map3, aes(longitude, latitude, fill = category)) +
+  facet_wrap(~Period, ncol = 3) +
+  scale_fill_manual(values = comparison_cols, drop = FALSE) +
+  coord_sf(xlim = xlim_map, ylim = ylim_map, datum = NA, expand = FALSE) +
+  labs(fill = NULL) + theme_void(base_size = 11) +
+  theme(strip.background = element_blank(), strip.text = element_text(face = "bold", size = 11),
+        legend.position = "bottom", legend.text = element_text(size = 9),
+        panel.spacing = grid::unit(0.1, "lines"), plot.margin = margin(0, 0, 0, 0))
+
+# (b) yearly area difference
+area3y <- bind_rows(lapply(years_all, function(y) {
+  a <- terra::expanse(cmp_year[[as.character(y)]], unit = "km", byValue = TRUE)
+  km2 <- setNames(rep(0, 4), as.character(0:3)); km2[as.character(a$value)] <- a$area
+  u <- km2["1"] + km2["2"] + km2["3"]
+  data.frame(year = y, gbif_only_km2 = km2["1"], combined_only_km2 = km2["2"], shared_km2 = km2["3"],
+             gbif_km2 = km2["1"] + km2["3"], combined_km2 = km2["2"] + km2["3"],
+             difference_mkm2 = (km2["2"] - km2["1"]) / 1e6, jaccard = km2["3"] / u)
+}))
+write.csv(area3y, "output/figure/area_comparison_annual.csv", row.names = FALSE)
+yr_x <- scale_x_continuous(breaks = seq(2001, 2025, 4))
+p3b <- ggplot(area3y, aes(year, difference_mkm2)) +
+  geom_hline(yintercept = 0, colour = "grey65", linewidth = 0.4) +
+  geom_line(colour = "black", linewidth = 0.6) + geom_point(colour = "black", size = 1.6) +
+  yr_x + labs(x = NULL, y = "Combined − GBIF (million km²)") + panel_theme
+
+# (c) latitude-elevation profile
+set.seed(123)
+lat3 <- bind_rows(lapply(periods, sample_comparison <- function(period) {
+  r <- comparison[[period]]; v <- terra::values(r, mat = FALSE)
+  cells <- unlist(lapply(1:3, function(k) { idx <- which(v == k)
+    if (length(idx) > N_PER_CATEGORY) sample(idx, N_PER_CATEGORY) else idx }), use.names = FALSE)
+  if (!length(cells)) return(data.frame())
+  xy <- terra::xyFromCell(r, cells)
+  data.frame(period = period, latitude = xy[, 2], elevation = terra::extract(elev, cells)[, 1],
+             category = factor(v[cells], levels = 1:3, labels = names(comparison_cols)),
+             cell_area = terra::extract(cell_area, cells)[, 1]) %>%
+    filter(is.finite(latitude), is.finite(elevation), is.finite(cell_area))
+}))
+lat3_summary <- lat3 %>% mutate(lat_band = floor(latitude / 10) * 10 + 5) %>%
+  group_by(category, lat_band) %>%
+  summarise(median_elev = wquantile(elevation, cell_area, p = 0.5), n = n(), .groups = "drop") %>%
+  filter(n >= 20)
+write.csv(lat3_summary, "output/figure/latitude_elevation_summary_annual.csv", row.names = FALSE)
+p3c <- ggplot(lat3_summary, aes(lat_band, median_elev, colour = category, group = category)) +
+  geom_line(linewidth = 0.7) + geom_point(size = 1.4) +
+  scale_colour_manual(values = comparison_cols, guide = "none") +
+  labs(x = "Latitude (°)", y = "Median elevation (m)") + panel_theme
+
+# (d) yearly centroid displacement
+cent_y <- function(r) {
+  cells <- which(terra::values(r, mat = FALSE) == 1)
+  xy <- terra::xyFromCell(r, cells) * pi / 180; w <- terra::extract(cell_area, cells)[, 1]
+  x <- sum(w * cos(xy[, 2]) * cos(xy[, 1])); y <- sum(w * cos(xy[, 2]) * sin(xy[, 1])); z <- sum(w * sin(xy[, 2]))
+  c(atan2(y, x), atan2(z, sqrt(x^2 + y^2))) * 180 / pi
+}
+centroids3y <- bind_rows(lapply(c("GBIF", "Combined"), function(s) {
+  m <- t(sapply(as.character(years_all), function(y) {
+    v <- cmp_year[[y]]; cent_y(if (s == "GBIF") v %in% c(1, 3) else v %in% c(2, 3)) }))
+  data.frame(year = years_all, Source = s, lon = m[, 1], lat = m[, 2],
+             centroid_shift_km = geosphere::distGeo(m[1, ], m) / 1000)
+}))
+write.csv(centroids3y, "output/figure/centroid_displacement_annual.csv", row.names = FALSE)
+p3d <- ggplot(centroids3y, aes(year, centroid_shift_km, group = Source, colour = Source, shape = Source)) +
+  geom_line(linewidth = 0.6) + geom_point(size = 1.6) +
+  scale_colour_manual(values = model_cols) + scale_shape_manual(values = c(GBIF = 16, Combined = 17)) +
+  yr_x + labs(x = NULL, y = "Centroid displacement (km)", colour = NULL, shape = NULL) +
+  panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
+
+figure3 <- (p3a / (p3b | p3c | p3d)) +
+  plot_layout(heights = c(2.5, 1), guides = "collect") +
+  plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
+  theme(legend.position = "bottom", plot.tag = element_text(face = "bold", size = 12))
+ggsave("output/figure/figure3_data_source_comparison_annual.png",
        figure3, width = 11.69, height = 8.27, dpi = 400, bg = "white")
 }

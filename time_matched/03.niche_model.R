@@ -226,7 +226,7 @@ if (run_per_period) write_csv(bind_rows(eval_table), "output/sdm/model_evaluatio
 # Time-matched annual model
 years_all <- 2001:2025
 
-run_annual_sdm <- function(dataset_name = "annual", bg_years_per_point = 4) {
+run_annual_sdm <- function(dataset_name = "annual", bg_years_per_point = 4, keep_sources = NULL) {
 
   out_dir <- paste0("output/sdm/", dataset_name)
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
@@ -239,6 +239,8 @@ run_annual_sdm <- function(dataset_name = "annual", bg_years_per_point = 4) {
   # One record per cell-year
   occ_all <- read_csv("data/com_data.csv", show_col_types = FALSE) %>%
     filter(between(year, min(years_all), max(years_all)))
+  # Optional source subset (GBIF-only model)
+  if (!is.null(keep_sources)) occ_all <- filter(occ_all, source %in% keep_sources)
   occ_all$cell <- cellFromXY(envs_list[[1]][[1]], as.matrix(occ_all[, c("longitude", "latitude")]))
   occ_all <- occ_all %>%
     filter(!is.na(cell)) %>%
@@ -338,6 +340,9 @@ run_annual_sdm <- function(dataset_name = "annual", bg_years_per_point = 4) {
   }
 }
 
+# Annual model data sets
+annual_sets <- strsplit(Sys.getenv("ANNUAL_DATASETS", "annual"), ",")[[1]]
 if (run_annual) {
-  run_annual_sdm()
+  if ("annual" %in% annual_sets) run_annual_sdm()
+  if ("annual_gbif" %in% annual_sets) run_annual_sdm("annual_gbif", keep_sources = "GBIF")
 }

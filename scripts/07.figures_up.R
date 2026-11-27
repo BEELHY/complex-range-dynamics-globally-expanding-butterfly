@@ -102,7 +102,7 @@ gbif_occ <- read.csv("data/occ/gbif.csv") %>%
   transmute(cell, year_group, source_group = "GBIF")
 
 supp_occ <- read.csv("data/occ/com.csv") %>%
-  filter(grepl("Facebook|Literature|Flickr", sources,
+  filter(grepl("Facebook|Literature|Flickr|Lohman", sources,
                ignore.case = TRUE)) %>%
   transmute(cell, year_group, source_group = "Supplementary")
 
