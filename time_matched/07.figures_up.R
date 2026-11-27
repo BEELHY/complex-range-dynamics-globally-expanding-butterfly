@@ -574,7 +574,7 @@ write.csv(cdist, "output/figure/centroid_distance_annual.csv", row.names = FALSE
 p3d <- ggplot(cdist, aes(year, centroid_distance_km)) +
   geom_line(colour = "black", linewidth = 0.75) + geom_point(colour = "black", size = 2.2) +
   scale_y_continuous(limits = c(0, NA)) +
-  yr_x + labs(x = NULL, y = "Centroid distance between\nGBIF and combined (km)") + panel_theme
+  yr_x + labs(x = NULL, y = "Centroid displacement (km)") + panel_theme
 
 figure3 <- (p3a / (p3b | p3c | p3d)) +
   plot_layout(heights = c(2.5, 1), guides = "collect") +
