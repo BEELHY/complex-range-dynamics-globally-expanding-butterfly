@@ -248,13 +248,15 @@ if (fig2_annual) {
   ann_lat <- ann %>% select(year, north_shift_km, south_shift_km) %>%
     pivot_longer(-year, names_to = "Hemisphere", values_to = "shift_km") %>%
     mutate(Hemisphere = recode(Hemisphere, north_shift_km = "Northern", south_shift_km = "Southern"))
+  # Coloured lines as Fig. 3c
+  hemi_cols <- c(Northern = "#9633CF", Southern = "#F4A300")
   p2c <- ggplot(ann_lat, aes(year, shift_km, group = Hemisphere,
-                             linetype = Hemisphere, shape = Hemisphere)) +
+                             colour = Hemisphere, shape = Hemisphere)) +
     geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) +
-    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 2) +
-    scale_linetype_manual(values = c(Northern = "solid", Southern = "dashed")) +
+    geom_line(linewidth = 0.7) + geom_point(size = 1.4) +
+    scale_colour_manual(values = hemi_cols) +
     scale_shape_manual(values = c(Northern = 16, Southern = 17)) +
-    year_axis + labs(x = NULL, y = "Poleward-edge shift (km)\n(95th percentile)", linetype = NULL, shape = NULL) +
+    year_axis + labs(x = NULL, y = "Poleward-edge shift (km)\n(95th percentile)", colour = NULL, shape = NULL) +
     panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
 
   p2d <- ggplot(ann, aes(year, elev95_shift_m)) +
