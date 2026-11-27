@@ -609,13 +609,24 @@ if (fig_annual_all) {
 gcb_save(figure2, "Figure_2", 125)
 if (fig_annual_all) {
   top_room <- theme(plot.margin = margin(16, 8, 6, 6))
-  # 3c legend as 2c
-  g3c <- p3c + scale_colour_manual(values = comparison_cols, name = NULL) + top_room +
-    theme(legend.position = "bottom", legend.text = element_text(size = 8))
-  g3 <- ((p3a + theme(legend.position = "bottom")) /
+  # One combined legend
+  draw_key_sqline <- function(data, params, size) {
+    col <- data$colour
+    grid::grobTree(
+      grid::rectGrob(x = 0.17, width = 0.30, height = 0.75, gp = grid::gpar(fill = col, col = NA)),
+      grid::segmentsGrob(0.42, 0.5, 0.98, 0.5, gp = grid::gpar(col = col, lwd = 0.7 * .pt)),
+      grid::pointsGrob(0.70, 0.5, pch = 19, size = grid::unit(1.4 * .pt, "pt"), gp = grid::gpar(col = col)))
+  }
+  g3c <- ggplot(lat3_summary, aes(lat_band, median_elev, colour = category, group = category)) +
+    geom_line(linewidth = 0.7, key_glyph = draw_key_sqline) + geom_point(size = 1.4, show.legend = FALSE) +
+    scale_colour_manual(values = comparison_cols, name = NULL, drop = FALSE) +
+    labs(x = "Latitude (°)", y = "Median elevation (m)") + panel_theme + top_room +
+    theme(legend.key.width = grid::unit(2.2, "lines"), legend.text = element_text(size = 9))
+  g3 <- ((p3a + guides(fill = "none")) /
          ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | g3c | (p3d + labs(y = "Centroid\ndisplacement (km)") + top_room))) +
-    plot_layout(heights = c(1.9, 1), guides = "keep") +
+    plot_layout(heights = c(1.9, 1), guides = "collect") +
     plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
-    theme(plot.tag = element_text(face = "bold", size = 12))
+    theme(legend.position = "bottom", legend.justification = "center",
+          plot.tag = element_text(face = "bold", size = 12))
   gcb_save(g3, "Figure_3", 118)
 }
