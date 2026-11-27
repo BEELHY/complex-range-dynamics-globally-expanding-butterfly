@@ -566,11 +566,15 @@ centroids3y <- bind_rows(lapply(c("GBIF", "Combined"), function(s) {
              centroid_shift_km = geosphere::distGeo(m[1, ], m) / 1000)
 }))
 write.csv(centroids3y, "output/figure/centroid_displacement_annual.csv", row.names = FALSE)
-p3d <- ggplot(centroids3y, aes(year, centroid_shift_km, group = Source, colour = Source, shape = Source)) +
-  geom_line(linewidth = 0.75) + geom_point(size = 2) +
-  scale_colour_manual(values = model_cols) + scale_shape_manual(values = c(GBIF = 16, Combined = 17)) +
-  yr_x + labs(x = NULL, y = "Centroid displacement (km)", colour = NULL, shape = NULL) +
-  panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
+# (d) distance between GBIF and combined centroids each year
+cdist <- centroids3y %>% select(year, Source, lon, lat) %>%
+  tidyr::pivot_wider(names_from = Source, values_from = c(lon, lat)) %>%
+  mutate(centroid_distance_km = geosphere::distGeo(cbind(lon_GBIF, lat_GBIF), cbind(lon_Combined, lat_Combined)) / 1000)
+write.csv(cdist, "output/figure/centroid_distance_annual.csv", row.names = FALSE)
+p3d <- ggplot(cdist, aes(year, centroid_distance_km)) +
+  geom_line(colour = "black", linewidth = 0.75) + geom_point(colour = "black", size = 2.2) +
+  scale_y_continuous(limits = c(0, NA)) +
+  yr_x + labs(x = NULL, y = "Centroid distance between\nGBIF and combined (km)") + panel_theme
 
 figure3 <- (p3a / (p3b | p3c | p3d)) +
   plot_layout(heights = c(2.5, 1), guides = "collect") +
@@ -593,10 +597,10 @@ tag_theme <- theme(plot.tag = element_text(face = "bold", size = 12))
 
 if (fig_annual_all) {
   g1a <- p1a + guides(colour = guide_legend(override.aes = list(shape = 15, size = 5, alpha = 1))) +
-    theme(legend.position = "inside", legend.position.inside = c(0.62, 0.9),
+    theme(legend.position = "top", legend.justification = "right",
           legend.direction = "horizontal", legend.text = element_text(size = 11))
   g1b <- p1b + theme(legend.position = "none")
-  gcb_save((g1a + g1b + plot_layout(widths = c(1.7, 1))) +
+  gcb_save((free(g1a) + g1b + plot_layout(widths = c(1.7, 1))) +
              plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") & tag_theme,
            "Figure_1", 78)
 }
@@ -604,7 +608,7 @@ gcb_save(figure2, "Figure_2", 125)
 if (fig_annual_all) {
   top_room <- theme(plot.margin = margin(16, 8, 6, 6))
   g3 <- (p3a / ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | (p3c + top_room) |
-                (p3d + labs(y = "Centroid\ndisplacement (km)") + top_room))) +
+                (p3d + top_room))) +
     plot_layout(heights = c(1.9, 1), guides = "collect") +
     plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
     theme(legend.position = "bottom", plot.tag = element_text(face = "bold", size = 12))
