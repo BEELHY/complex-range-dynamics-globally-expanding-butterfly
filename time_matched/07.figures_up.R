@@ -612,16 +612,19 @@ if (fig_annual_all) {
   # One combined legend
   draw_key_sqline <- function(data, params, size) {
     col <- data$colour
+    sq <- grid::unit(1, "snpc")  # Square as other legends
     grid::grobTree(
-      grid::rectGrob(x = 0.17, width = 0.30, height = 0.75, gp = grid::gpar(fill = col, col = NA)),
-      grid::segmentsGrob(0.42, 0.5, 0.98, 0.5, gp = grid::gpar(col = col, lwd = 0.7 * .pt)),
-      grid::pointsGrob(0.70, 0.5, pch = 19, size = grid::unit(1.4 * .pt, "pt"), gp = grid::gpar(col = col)))
+      grid::rectGrob(x = sq * 0.5, width = sq, height = sq, gp = grid::gpar(fill = col, col = NA)),
+      grid::segmentsGrob(sq + grid::unit(3, "pt"), grid::unit(0.5, "npc"), grid::unit(1, "npc"), grid::unit(0.5, "npc"),
+                         gp = grid::gpar(col = col, lwd = 0.7 * .pt)),
+      grid::pointsGrob((sq + grid::unit(3, "pt") + grid::unit(1, "npc")) * 0.5, grid::unit(0.5, "npc"), pch = 19,
+                       size = grid::unit(1.4 * .pt, "pt"), gp = grid::gpar(col = col)))
   }
   g3c <- ggplot(lat3_summary, aes(lat_band, median_elev, colour = category, group = category)) +
     geom_line(linewidth = 0.7, key_glyph = draw_key_sqline) + geom_point(size = 1.4, show.legend = FALSE) +
     scale_colour_manual(values = comparison_cols, name = NULL, drop = FALSE) +
     labs(x = "Latitude (°)", y = "Median elevation (m)") + panel_theme + top_room +
-    theme(legend.key.width = grid::unit(2.2, "lines"), legend.text = element_text(size = 9))
+    theme(legend.key.width = grid::unit(3.2, "lines"), legend.key.height = grid::unit(1.2, "lines"), legend.text = element_text(size = 9))
   g3 <- ((p3a + guides(fill = "none")) /
          ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | g3c | (p3d + labs(y = "Centroid\ndisplacement (km)") + top_room))) +
     plot_layout(heights = c(1.9, 1), guides = "collect") +
