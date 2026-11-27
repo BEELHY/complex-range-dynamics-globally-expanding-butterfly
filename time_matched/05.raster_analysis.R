@@ -593,3 +593,10 @@ by_cont <- bind_rows(lapply(seq_along(years_all), function(i) {
   data.frame(year = years_all[i], continent = z[, 1], area_mkm2 = z[, 2] / 1e6)
 }))
 write.csv(by_cont, "output/annual/annual_area_by_continent.csv", row.names = FALSE)
+
+# Area by years suitable
+land_v <- terra::vect(rnaturalearth::ne_download(scale = 50, type = "land", category = "physical", returnclass = "sf"))
+n_land <- terra::ifel(terra::rasterize(land_v, n_suit, field = 1, background = 0) == 1, n_suit, NA)
+yrs_area <- terra::zonal(terra::cellSize(n_suit, unit = "km") / 1e6, n_land, fun = "sum", na.rm = TRUE)
+names(yrs_area) <- c("years", "area_mkm2")
+write.csv(yrs_area[yrs_area$years > 0, ], "output/annual/area_by_years_suitable.csv", row.names = FALSE)
