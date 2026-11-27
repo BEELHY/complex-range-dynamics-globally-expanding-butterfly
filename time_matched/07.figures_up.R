@@ -566,7 +566,7 @@ centroids3y <- bind_rows(lapply(c("GBIF", "Combined"), function(s) {
              centroid_shift_km = geosphere::distGeo(m[1, ], m) / 1000)
 }))
 write.csv(centroids3y, "output/figure/centroid_displacement_annual.csv", row.names = FALSE)
-# (d) distance between GBIF and combined centroids each year
+# (d) GBIF-combined centroid distance
 cdist <- centroids3y %>% select(year, Source, lon, lat) %>%
   tidyr::pivot_wider(names_from = Source, values_from = c(lon, lat)) %>%
   mutate(centroid_distance_km = geosphere::distGeo(cbind(lon_GBIF, lat_GBIF), cbind(lon_Combined, lat_Combined)) / 1000)
