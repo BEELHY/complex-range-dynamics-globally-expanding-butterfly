@@ -16,7 +16,7 @@ period_levels <- unname(period_labels)
 vars <- c("PDSI", "ppt", "soil", "tmin", "ws", "elev")
 categories <- c("GBIF only", "Supplementary only", "Both")
 thresholds <- c(0.02, 0.05, 0.10)
-REBUILD_GRIDS <- TRUE  # rebuild cached grids
+REBUILD_GRIDS <- as.logical(Sys.getenv("REBUILD_GRIDS", "TRUE"))  # rebuild cached grids
 
 ###############################################
 # ENVIRONMENTAL BACKGROUND AND SHARED PCA
@@ -196,3 +196,73 @@ print(p_final)
 
 ggsave("output/figure/environmental_coverage_annual.png", p_final,
        width = 11.69, height = 13, dpi = 400, bg = "white")
+
+#####################################################
+# Five-year means of annual results
+win_labels <- c(yr1 = "2001–2005", yr2 = "2006–2010", yr3 = "2011–2015", yr4 = "2016–2020", yr5 = "2021–2025")
+win_years <- split(periods, rep(names(win_labels), each = 5))
+mean_density <- function(grids, yrs) {
+  z <- lapply(yrs, function(y) { r <- grids[[y]]$z.uncor; r / max(terra::values(r), na.rm = TRUE) })
+  terra::app(terra::rast(z), mean, na.rm = TRUE)
+}
+classify_mean <- function(w, thr) {
+  yrs <- intersect(win_years[[w]], ok_years)
+  g <- terra::values(mean_density(grid_gbif, yrs), mat = FALSE)
+  s <- terra::values(mean_density(grid_supp, yrs), mat = FALSE)
+  gp <- is.finite(g) & g >= thr * max(g, na.rm = TRUE)
+  sp <- is.finite(s) & s >= thr * max(s, na.rm = TRUE)
+  cls <- rep(NA_character_, length(g))
+  cls[gp & !sp] <- "GBIF only"; cls[!gp & sp] <- "Supplementary only"; cls[gp & sp] <- "Both"
+  cells <- which(!is.na(cls)); xy <- terra::xyFromCell(grid_gbif[[yrs[1]]]$z.uncor, cells)
+  data.frame(PC1 = xy[, 1], PC2 = xy[, 2], period = factor(win_labels[[w]], levels = win_labels),
+             category = factor(cls[cells], levels = categories))
+}
+env_class_df <- dplyr::bind_rows(lapply(names(win_labels), classify_mean, thr = 0.05))
+supp_pct <- coverage_summary %>% filter(category == "Supplementary only") %>%
+  mutate(year = as.character(period),
+         window = win_labels[vapply(year, function(y) names(win_years)[sapply(win_years, function(v) y %in% v)], "")]) %>%
+  group_by(threshold, window) %>%
+  summarise(percentage = mean(percentage), n_years = n(), .groups = "drop") %>%
+  rename(period = window)
+write.csv(supp_pct, "output/niche_annual5_supp_only_mean.csv", row.names = FALSE)
+supp_pct <- supp_pct %>% filter(threshold == 0.05)
+print(supp_pct)
+period_levels <- unname(win_labels)
+
+# Maps and bar chart
+p1 <- ggplot(env_class_df, aes(PC1, PC2, fill = category)) +
+  geom_raster() + facet_wrap(~period, nrow = 1) +
+  scale_fill_manual(values = c("GBIF only" = "darkgoldenrod1", "Supplementary only" = "darkorchid3",
+                               "Both" = "skyblue"), drop = FALSE) +
+  scale_x_continuous(breaks = c(-6, -3, 0)) + coord_equal(expand = FALSE) +
+  labs(x = sprintf("Environmental PC1 (%.1f%%)", pc_var[1]),
+       y = sprintf("Environmental PC2 (%.1f%%)", pc_var[2]), fill = NULL) +
+  theme_classic(base_size = 11) +
+  theme(strip.background = element_blank(), strip.text = element_text(face = "bold"),
+        panel.spacing = grid::unit(0.3, "lines"), plot.margin = margin(5, 5, 5, 5))
+
+xmax <- max(50, ceiling(max(supp_pct$percentage, na.rm = TRUE) / 10) * 10)
+p2 <- ggplot(supp_pct %>% mutate(strip = " "), aes(percentage, factor(period, levels = rev(period_levels)))) +
+  geom_col(fill = "darkorchid3", width = 0.6) + facet_wrap(~strip, nrow = 1) +
+  scale_x_continuous(limits = c(0, xmax), breaks = seq(0, xmax, by = 10),
+                     expand = expansion(mult = c(0, 0.02))) +
+  labs(x = "Supplementary-only space (%)", y = NULL) + theme_classic(base_size = 11) +
+  theme(strip.background = element_blank(), axis.text.y = element_text(size = 9),
+        panel.grid.major.x = element_line(colour = "grey90"), plot.margin = margin(5, 5, 5, 5))
+
+p_final <- (p1 | p2) +
+  patchwork::plot_layout(widths = c(5, 1.5), guides = "collect") &
+  theme(legend.position = "bottom")
+ggsave("output/figure/environmental_coverage_annual5.png", p_final,
+       width = 11.69, height = 4.3, dpi = 400, bg = "white")
+
+# GCB export (180 mm)
+saveRDS(list(env_class_df = env_class_df, supp_pct = supp_pct, pc_var = pc_var), "output/niche_annual5_plotting_data.rds")
+g4 <- ((p1 + theme(legend.position = "top", legend.justification = "right")) |
+       (p2 + theme(legend.position = "none", plot.margin = margin(5, 14, 5, 5)))) +
+  patchwork::plot_layout(widths = c(5, 1.6)) +
+  patchwork::plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
+  theme(plot.tag = element_text(face = "bold", size = 12))
+dir.create("output/figure/gcb", showWarnings = FALSE)
+ggsave("output/figure/gcb/Figure_4.tif", g4, width = 180, height = 60, units = "mm", dpi = 600,
+       device = ragg::agg_tiff, compression = "lzw", scaling = 0.8, bg = "white")

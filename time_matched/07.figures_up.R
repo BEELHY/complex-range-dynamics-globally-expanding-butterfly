@@ -232,7 +232,7 @@ p2d <- ggplot(metrics, aes(Period, elev95_shift_m, group = 1)) +
   scale_x_discrete(labels = short_labels) +
   labs(x = NULL, y = "Elevational-edge shift (m)\n(95th percentile)") + panel_theme
 
-# Annual panels with trends
+# Annual panels (b)-(d)
 if (fig2_annual) {
   sfx <- "_annual"
   ann <- read.csv("output/annual/annual_metrics.csv") %>%
@@ -240,10 +240,9 @@ if (fig2_annual) {
            south_shift_km = (south95_deg - first(south95_deg)) * 111.2,
            elev95_shift_m = elev95_m - first(elev95_m))
   year_axis <- scale_x_continuous(breaks = c(2001, 2005, 2010, 2015, 2020, 2025))
-  trend <- geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = "grey55", linewidth = 0.6)
 
-  p2b <- ggplot(ann, aes(year, area_mkm2)) + trend +
-    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.6) +
+  p2b <- ggplot(ann, aes(year, area_mkm2)) +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 2.2) +
     year_axis + labs(x = NULL, y = "Suitable habitat (million km²)") + panel_theme
 
   ann_lat <- ann %>% select(year, north_shift_km, south_shift_km) %>%
@@ -251,16 +250,16 @@ if (fig2_annual) {
     mutate(Hemisphere = recode(Hemisphere, north_shift_km = "Northern", south_shift_km = "Southern"))
   p2c <- ggplot(ann_lat, aes(year, shift_km, group = Hemisphere,
                              linetype = Hemisphere, shape = Hemisphere)) +
-    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) + trend +
-    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.5) +
+    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 2) +
     scale_linetype_manual(values = c(Northern = "solid", Southern = "dashed")) +
     scale_shape_manual(values = c(Northern = 16, Southern = 17)) +
     year_axis + labs(x = NULL, y = "Poleward-edge shift (km)\n(95th percentile)", linetype = NULL, shape = NULL) +
     panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
 
   p2d <- ggplot(ann, aes(year, elev95_shift_m)) +
-    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) + trend +
-    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 1.6) +
+    geom_hline(yintercept = 0, colour = "grey70", linewidth = 0.35) +
+    geom_line(colour = "black", linewidth = 0.7) + geom_point(colour = "black", size = 2.2) +
     year_axis + labs(x = NULL, y = "Elevational-edge shift (m)\n(95th percentile)") + panel_theme
 }
 
@@ -527,7 +526,7 @@ write.csv(area3y, "output/figure/area_comparison_annual.csv", row.names = FALSE)
 yr_x <- scale_x_continuous(breaks = seq(2001, 2025, 4))
 p3b <- ggplot(area3y, aes(year, difference_mkm2)) +
   geom_hline(yintercept = 0, colour = "grey65", linewidth = 0.4) +
-  geom_line(colour = "black", linewidth = 0.6) + geom_point(colour = "black", size = 1.6) +
+  geom_line(colour = "black", linewidth = 0.75) + geom_point(colour = "black", size = 2.2) +
   yr_x + labs(x = NULL, y = "Combined − GBIF (million km²)") + panel_theme
 
 # (c) latitude-elevation profile
@@ -568,7 +567,7 @@ centroids3y <- bind_rows(lapply(c("GBIF", "Combined"), function(s) {
 }))
 write.csv(centroids3y, "output/figure/centroid_displacement_annual.csv", row.names = FALSE)
 p3d <- ggplot(centroids3y, aes(year, centroid_shift_km, group = Source, colour = Source, shape = Source)) +
-  geom_line(linewidth = 0.6) + geom_point(size = 1.6) +
+  geom_line(linewidth = 0.75) + geom_point(size = 2) +
   scale_colour_manual(values = model_cols) + scale_shape_manual(values = c(GBIF = 16, Combined = 17)) +
   yr_x + labs(x = NULL, y = "Centroid displacement (km)", colour = NULL, shape = NULL) +
   panel_theme + theme(legend.position = "bottom", legend.text = element_text(size = 8))
@@ -579,4 +578,35 @@ figure3 <- (p3a / (p3b | p3c | p3d)) +
   theme(legend.position = "bottom", plot.tag = element_text(face = "bold", size = 12))
 ggsave("output/figure/figure3_data_source_comparison_annual.png",
        figure3, width = 11.69, height = 8.27, dpi = 400, bg = "white")
+}
+
+############################################
+# GCB export (180 mm)
+############################################
+# Keep original proportions
+dir.create("output/figure/gcb", showWarnings = FALSE)
+gcb_save <- function(p, name, h_mm, scaling = 0.8) {
+  ggsave(file.path("output/figure/gcb", paste0(name, ".tif")), p, width = 180, height = h_mm, units = "mm",
+         dpi = 600, device = ragg::agg_tiff, compression = "lzw", scaling = scaling, bg = "white")
+}
+tag_theme <- theme(plot.tag = element_text(face = "bold", size = 12))
+
+if (fig_annual_all) {
+  g1a <- p1a + guides(colour = guide_legend(override.aes = list(shape = 15, size = 5, alpha = 1))) +
+    theme(legend.position = "inside", legend.position.inside = c(0.62, 0.9),
+          legend.direction = "horizontal", legend.text = element_text(size = 11))
+  g1b <- p1b + theme(legend.position = "none")
+  gcb_save((g1a + g1b + plot_layout(widths = c(1.7, 1))) +
+             plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") & tag_theme,
+           "Figure_1", 78)
+}
+gcb_save(figure2, "Figure_2", 125)
+if (fig_annual_all) {
+  top_room <- theme(plot.margin = margin(16, 8, 6, 6))
+  g3 <- (p3a / ((p3b + labs(y = "Combined − GBIF\n(million km²)") + top_room) | (p3c + top_room) |
+                (p3d + labs(y = "Centroid\ndisplacement (km)") + top_room))) +
+    plot_layout(heights = c(1.9, 1), guides = "collect") +
+    plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
+    theme(legend.position = "bottom", plot.tag = element_text(face = "bold", size = 12))
+  gcb_save(g3, "Figure_3", 118)
 }
